@@ -1,0 +1,55 @@
+version: "3.9"
+
+networks:
+  worker-application_default:
+
+services:
+  db:
+    image: postgres:13
+    container_name: postgres
+    environment:
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - postgres_storage_training:/var/lib/postgresql/data/
+      - ./sql/create_tables.sql:/docker-entrypoint-initdb.d/create_tables.sql
+      - ./sql/fill_tables.sql:/docker-entrypoint-initdb.d/fill_tables.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - worker-application_default
+
+  master:
+    image: locustio/locust
+    ports:
+     - "8089:8089"
+    volumes:
+      - ./locust:/mnt/locust
+    command: -f /mnt/locust/locustfile.py --master -H http://goapi:3000
+    networks:
+      - worker-application_default
+
+  worker:
+    image: locustio/locust
+    volumes:
+      - ./locust:/mnt/locust
+    command: -f /mnt/locust/locustfile.py --worker --master-host master
+    networks:
+      - worker-application_default
+
+  goapi:
+    build:
+      context: go-api
+      dockerfile: ./Dockerfile
+    container_name: goapi
+    volumes:
+      - ./go-api/source:/opt/app/api
+    ports:
+      - "3000:3000"
+    networks:
+      - worker-application_default
+
+volumes:
+  postgres_storage_training:
+    driver: local
